@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Server",
+      "type": "shell",
+      "command": "${workspaceFolder}/server/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}\\server\\.venv\\Scripts\\python.exe" },
+      "args": ["-m", "uvicorn", "app.main:app", "--reload", "--port", "8000"],
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "group": "run" }
+    },
+    {
+      "label": "Web app",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "group": "run" }
+    },
+    {
+      "label": "Start everything",
+      "dependsOn": ["Server", "Web app"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "Server tests",
+      "type": "shell",
+      "command": "${workspaceFolder}/server/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}\\server\\.venv\\Scripts\\python.exe" },
+      "args": ["-m", "pytest", "-q"],
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

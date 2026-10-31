@@ -1,0 +1,72 @@
+{
+  "manifest_version": 3,
+  "name": "BolBridge – Live Call Translator",
+  "short_name": "BolBridge",
+  "version": "0.2.2",
+  "description": "Speak your language, be heard in theirs. Live two-way voice translation on WhatsApp Web, OmeTV, Google Meet and more.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "BolBridge",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "permissions": ["storage", "scripting"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://ome.tv/*",
+    "https://*.ome.tv/*",
+    "https://meet.google.com/*",
+    "https://app.zoom.us/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.whatsapp.com/*",
+        "https://ome.tv/*",
+        "https://*.ome.tv/*",
+        "https://meet.google.com/*",
+        "https://app.zoom.us/*"
+      ],
+      "js": ["src/content/main-world.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*",
+        "https://ome.tv/*",
+        "https://*.ome.tv/*",
+        "https://meet.google.com/*",
+        "https://app.zoom.us/*"
+      ],
+      "js": ["src/content/bridge.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:3000/*",
+      "http://127.0.0.1:3000/*",
+      "https://bolbridge.app/*",
+      "https://*.bolbridge.app/*"
+    ]
+  }
+}

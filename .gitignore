@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+server/.env
+server/.env.live
+server/data/
+
+# Node
+node_modules/
+web/dist/
+web/.env.local
+
+# Voice service
+voice-clone-service/.venv/
+voice-clone-service/checkpoints_v2/
+voice-clone-service/store/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+
+# Secrets and local data (never commit)
+*.db
+*.sqlite*
+*.pem
+*.key
+.env
+.env.*
+!.env.example

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>BolBridge</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="4" width="18" height="14" rx="5" fill="#3D4BFF"></rect><path d="M7 17l-2 6 7-6z" fill="#3D4BFF"></path><rect x="12" y="11" width="18" height="14" rx="5" fill="#FF7A1A"></rect><path d="M25 24l2 6-7-6z" fill="#FF7A1A"></path></svg>
+      <strong>BolBridge</strong>
+    </div>
+    <a id="openDashboard" class="icon-link" href="#" aria-label="Open dashboard">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10"></path><path d="M18 6h2"></path><path d="M4 12h4"></path><path d="M12 12h8"></path><path d="M4 18h12"></path><circle cx="16" cy="6" r="2"></circle><circle cx="10" cy="12" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg>
+    </a>
+  </header>
+
+  <main>
+    <p class="status"><span id="statusDot" class="dot"></span><span><strong id="siteName">This tab</strong> · <span id="statusText">checking…</span></span></p>
+
+    <div id="enableSite" class="notice hidden">
+      <p>BolBridge isn't set up for this website yet.</p>
+      <button id="enableSiteBtn" type="button" class="btn-dark">Use BolBridge on this site</button>
+    </div>
+
+    <section id="mainCard" class="main-card on">
+      <div>
+        <strong id="onLabel">Translation on</strong>
+        <span id="onSub">They hear you in their language</span>
+      </div>
+      <button id="onSwitch" type="button" role="switch" aria-checked="true" aria-label="Translation" class="switch big"><span></span></button>
+    </section>
+
+    <div class="langs">
+      <label class="lang">
+        <span>I speak</span>
+        <select id="myLang"></select>
+      </label>
+      <button id="swap" type="button" class="swap" aria-label="Swap languages">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l-4 4 4 4"></path><path d="M3 8h14"></path><path d="M17 20l4-4-4-4"></path><path d="M21 16H7"></path></svg>
+      </button>
+      <label class="lang">
+        <span>They speak</span>
+        <select id="theirLang"></select>
+      </label>
+    </div>
+    <p id="voiceWarning" class="warning hidden"></p>
+
+    <ul class="toggles">
+      <li><span>Speak in my own voice</span><button type="button" role="switch" class="switch" data-key="useMyVoice" aria-label="Speak in my own voice"><span></span></button></li>
+      <li><span>Hear their real voice softly</span><button type="button" role="switch" class="switch" data-key="hearOriginal" aria-label="Hear their real voice softly"><span></span></button></li>
+      <li><span>Tell them the call is translated</span><button type="button" role="switch" class="switch" data-key="announce" aria-label="Tell them the call is translated"><span></span></button></li>
+    </ul>
+
+    <section class="live" aria-live="polite">
+      <span class="live-label">LIVE</span>
+      <div id="captions"><p class="muted">Subtitles show here during a call.</p></div>
+    </section>
+
+    <p id="error" class="error hidden"></p>
+    <p class="tip">Use headphones so your speakers don't get translated back.</p>
+
+    <details class="advanced">
+      <summary>Account and server</summary>
+      <p id="accountLine" class="muted"></p>
+      <a id="connectAccount" href="#" class="btn-outline">Connect my account</a>
+      <label class="field">
+        <span>Account key (only if automatic sign-in fails)</span>
+        <input id="tokenInput" type="password" autocomplete="off" placeholder="Paste the key from the web app">
+      </label>
+      <label class="field">
+        <span>Translation server</span>
+        <input id="serverUrl" type="url" placeholder="http://localhost:8000">
+      </label>
+      <label class="field">
+        <span>Web app</span>
+        <input id="webUrl" type="url" placeholder="http://localhost:3000">
+      </label>
+    </details>
+  </main>
+
+  <footer>
+    <span id="minutes">Minutes: not signed in</span>
+    <a id="getMinutes" href="#">Get more minutes</a>
+  </footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

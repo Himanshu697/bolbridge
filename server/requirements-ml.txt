@@ -1,0 +1,22 @@
+# Open-source models for ENGINE_PRESET=open-source
+# Use Python 3.10, 3.11 or 3.12 (Kokoro does not support 3.13 yet).
+# GPU (NVIDIA): install the CUDA build of torch first, see https://pytorch.org
+-r requirements.txt
+
+# Speech-to-text: Whisper via CTranslate2 (MIT). CTranslate2 also runs the int8 translator.
+faster-whisper>=1.1
+ctranslate2>=4.4
+# Faster speech-to-text (HINDI_ASR=indicconformer, EUROPEAN_ASR=parakeet):
+# AI4Bharat IndicConformer (MIT) and NVIDIA Parakeet v3 (CC-BY-4.0) through onnx-asr (MIT)
+onnx-asr[cpu,hub]
+
+# Translation: M2M100 (MIT) through Hugging Face transformers
+torch>=2.2
+transformers>=4.40
+sentencepiece>=0.2
+
+# Text-to-speech: Kokoro-82M (Apache-2.0). Also install espeak-ng on the machine.
+kokoro>=0.9.4
+soundfile>=0.12
+# Japanese and Mandarin voices need extra text processing:
+# misaki[ja,zh]
