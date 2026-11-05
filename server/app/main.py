@@ -24,7 +24,7 @@ from .routers.testcall import router as testcall_router
 from .routers.auth import router as auth_router
 from .routers.voice import router as voice_router
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 
 def create_app(settings: Settings | None = None, engines: Engines | None = None) -> FastAPI:

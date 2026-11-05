@@ -126,13 +126,17 @@ server (AWS EC2, E2E Networks or any VPS) with HTTPS, and
 - Server: all unit and stream tests pass (mock engines).
 - Web app: sign-up, dashboard, contacts, translator test page, voice upload,
   plans and waitlists, driven in Chrome.
-- Extension (v0.3): on Meet-like test calls (mic opened before any click,
+- Extension (v0.3.1): on Meet-like test calls (mic opened before any click,
   Chrome's real autoplay rules, the other person played through `<audio>` or
   Web Audio) both directions are translated, the original voice is turned down,
-  and the real voice comes back if the server is unreachable or stops. The popup
-  has a Diagnostics section, and the web app has a **Test the extension** page.
-  A first real Google Meet call (v0.2) failed; v0.3 is the fix, still to be
-  confirmed on a real call.
+  and the real voice comes back if the server is unreachable or stops. v0.3.1
+  also covers pages that send their own processed or cloned copy of the mic,
+  take the mic or the call connection from a fresh about:blank frame, or mute
+  through the call itself: the call connection always carries BolBridge's
+  audio. The popup's Diagnostics shows how the call sends your voice and the
+  sound levels on each side, and the web app has a **Test the extension** page.
+  The first real Google Meet call (v0.2) failed; still to be confirmed on a
+  real call.
 - Real models on a laptop (Ryzen 5 3500U, CPU only, WSL with 9 GB): Whisper
   small, M2M100 and Kokoro run; Hindi to English took about 10 s per sentence
   (hearing 6 s, translating 2.5 s, voice 2 s). Whisper small mishears Hindi, so

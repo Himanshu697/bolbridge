@@ -305,7 +305,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 /** One summary for the popup: the frame that holds the call, plus its sockets. */
 function tabDiag(tabFrames) {
   const withPage = tabFrames.filter((f) => f.diag);
-  const busy = (f) => (f.diag.mics || 0) + (f.diag.theirTracks || 0);
+  const busy = (f) => (f.diag.mics || 0) + (f.diag.wraps || 0) + (f.diag.theirTracks || 0) + (f.diag.calls || 0);
   const best = withPage.sort((a, b) => busy(b) - busy(a) || Number(b.top) - Number(a.top))[0];
   const net = { out: newNet(), in: newNet() };
   for (const f of tabFrames) {
@@ -326,6 +326,8 @@ function tabDiag(tabFrames) {
     version: chrome.runtime.getManifest().version,
     page: best ? best.diag : null,
     frames: tabFrames.length,
+    // every frame that reported, for "Copy diagnostics"
+    frameList: withPage.map((f) => ({ frameId: f.frameId, top: f.top, platform: f.platform, diag: f.diag })),
     net,
     server: settings.serverUrl,
     signedIn: !!settings.token,

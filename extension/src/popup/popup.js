@@ -159,6 +159,18 @@ const CLOSE_REASONS = {
   4402: 'no minutes left this month',
 };
 
+// How the call sends your voice (see main-world.js sendDiag).
+const SEND_PATHS = {
+  ours: ['ok', 'The call sends your voice through BolBridge.'],
+  around: ['bad', 'The call sends your voice around BolBridge, so they hear your real voice. Press Copy diagnostics and send it.'],
+  muted: ['warn', 'You are muted in the call.'],
+  none: ['wait', 'The call is not sending your voice yet.'],
+  nocall: ['wait', 'Not in a call yet.'],
+};
+
+const SOUND = 0.004; // level that counts as sound, not silence
+const loud = (x) => (x == null ? 'unknown' : x >= SOUND ? 'sound' : 'silent');
+
 function seconds(bytes) {
   return Math.round(bytes / 32000); // 16 kHz, 16-bit mono
 }
@@ -183,12 +195,18 @@ function diagRows(status) {
   if (!p) {
     rows.push(['wait', 'Page ready. Waiting for the call to use the microphone.']);
   } else {
-    if (p.mics > 0) rows.push(p.micMuted ? ['warn', 'Microphone captured, but you are muted in the call.'] : ['ok', 'Microphone captured.']);
+    if (p.mics > 0 || p.wraps > 0) rows.push(p.micMuted ? ['warn', 'Microphone captured, but you are muted in the call.'] : ['ok', 'Microphone captured.']);
     else rows.push(['wait', p.micRequests > 0 ? 'Microphone was released.' : 'No microphone yet: join the call.']);
     if (p.audio === 'running') rows.push(['ok', `Audio engine running (${p.sampleRate} Hz).`]);
     else if (p.audio === 'suspended') rows.push(['bad', 'Audio is paused by Chrome: click anywhere on the call page once.']);
     else rows.push(['wait', `Audio engine: ${p.audio}.`]);
+    const path = SEND_PATHS[p.sendPath];
+    if (path) rows.push(path);
     rows.push(p.theirTracks > 0 ? ['ok', `Their audio found (${p.theirTracks} stream${p.theirTracks > 1 ? 's' : ''}).`] : ['wait', 'Waiting for the other person to join.']);
+    if (p.levels && (p.calls > 0 || p.theirTracks > 0)) {
+      const l = p.levels;
+      rows.push([l.mic >= SOUND || l.theirs >= SOUND ? 'ok' : 'wait', `Sound in the last 5 s: your mic ${loud(l.mic)}, sent to them ${loud(l.sent)}, their voice ${loud(l.theirs)}.`]);
+    }
   }
   if (!d.on) rows.push(['warn', 'Translation is off.']);
   const [outCls, outText] = serverLine(d.net.out);

@@ -19,11 +19,20 @@
     ['meet.google.com', 'google-meet'],
     ['zoom.us', 'zoom-web'],
   ];
-  const host = location.hostname;
+  // about:blank frames have no host of their own: use the page that made them
+  const host = location.hostname || (location.ancestorOrigins && location.ancestorOrigins.length ? hostOf(location.ancestorOrigins[0]) : '');
   const platform = (PLATFORMS.find(([h]) => host === h || host.endsWith('.' + h)) || [null, host])[1];
 
   let settings = null;
   let port = null;
+
+  function hostOf(origin) {
+    try {
+      return new URL(origin).hostname;
+    } catch (e) {
+      return '';
+    }
+  }
 
   function getPort() {
     if (port) return port;
@@ -87,7 +96,7 @@
       case 'diag': {
         // Only frames that touch a microphone or a call report in; idle frames stay quiet.
         const d = msg.diag || {};
-        if (!port && !(d.micRequests > 0 || d.theirTracks > 0)) break;
+        if (!port && !(d.gumCalls > 0 || d.calls > 0 || d.theirTracks > 0 || d.mics > 0)) break;
         const p = getPort();
         if (p) p.postMessage({ type: 'diag', diag: d, top: IS_TOP });
         break;

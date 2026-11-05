@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "BolBridge – Live Call Translator",
   "short_name": "BolBridge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Speak your language, be heard in theirs. Live two-way voice translation on WhatsApp Web, OmeTV, Google Meet and more.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -60,7 +60,8 @@
       ],
       "run_at": "document_start",
       "world": "MAIN",
-      "all_frames": true
+      "all_frames": true,
+      "match_about_blank": true
     },
     {
       "matches": [
@@ -81,7 +82,8 @@
         "src/content/bridge.js"
       ],
       "run_at": "document_start",
-      "all_frames": true
+      "all_frames": true,
+      "match_about_blank": true
     }
   ],
   "externally_connectable": {
