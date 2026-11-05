@@ -20,7 +20,10 @@ async function init() {
     }
   }
 
-  $('onSwitch').addEventListener('click', () => save({ on: !settings.on }));
+  $('onSwitch').addEventListener('click', async () => {
+    await save({ on: !settings.on });
+    if (settings.on) startTabAudio();
+  });
   $('myLang').addEventListener('change', (e) => save({ myLang: e.target.value }));
   $('theirLang').addEventListener('change', (e) => save({ theirLang: e.target.value }));
   $('swap').addEventListener('click', () => save({ myLang: settings.theirLang, theirLang: settings.myLang }));
@@ -49,7 +52,25 @@ async function init() {
 
   render();
   await refreshStatus();
+  startTabAudio();
   setInterval(refreshStatus, 1000);
+}
+
+// Opening this popup on a call tab is what lets BolBridge hear the tab's
+// sound (Chrome allows it only after you click the extension). That sound is
+// the other person, however the site plays them.
+let tabAudioAsked = false;
+async function startTabAudio() {
+  const st = lastStatus;
+  if (!settings.on || !tab || !st || !st.injected || tabAudioAsked) return;
+  if (st.tabAudio && (st.tabAudio.state === 'on' || st.tabAudio.state === 'starting')) return;
+  tabAudioAsked = true;
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'bb-tab-audio-start', tabId: tab.id });
+    if (!res || !res.ok) throw new Error((res && res.error) || 'no answer');
+  } catch (e) {
+    $('diagNote').textContent = `Could not hear this tab's sound: ${e.message || e}`;
+  }
 }
 
 function save(patch) {
@@ -120,6 +141,7 @@ async function refreshStatus() {
 
   lastStatus = status;
   renderDiag(status);
+  startTabAudio(); // as soon as the call page has reported in
 
   const box = $('captions');
   box.replaceChildren();
@@ -216,11 +238,18 @@ function diagRows(status) {
   rows.push(['wait', `Sent to server: your audio ${seconds(d.net.out.bytes)} s, theirs ${seconds(d.net.in.bytes)} s.`]);
   const tr = (n) => `${n.results} done${n.pending ? `, ${n.pending} in progress` : ''}${n.noSpeech ? `, ${n.noSpeech} with no words heard` : ''}`;
   rows.push([d.net.out.results || d.net.in.results ? 'ok' : 'wait', `Translations: you → them ${tr(d.net.out)}; them → you ${tr(d.net.in)}.`]);
+  const ta = status.tabAudio;
+  const tabOn = !!ta && ta.state === 'on';
+  if (tabOn) rows.push(['ok', `Their voice: heard from this tab's sound (${loud(ta.level)} in the last 5 s).`]);
+  else if (ta && ta.state === 'starting') rows.push(['wait', "Their voice: starting to hear this tab's sound…"]);
+  else if (ta && ta.state === 'error') rows.push(['bad', `Their voice: could not hear this tab (${ta.error}). Close and open this popup again.`]);
+  else if (d.on && p && (p.calls > 0 || p.theirTracks > 0)) rows.push(['warn', 'Their voice: open this popup once more during the call so BolBridge can hear the tab.']);
   if (p && d.on) {
     rows.push(p.speech.out ? ['ok', 'They hear your translated voice.'] : ['warn', 'They hear your real voice (server not ready yet).']);
-    if (p.theirTracks > 0) {
-      const ducked = (p.duckedElements || 0) + (p.duckedWebAudio || 0);
-      if (!p.speech.in) rows.push(['warn', 'You hear their real voice (server not ready yet).']);
+    if (p.theirTracks > 0 || tabOn) {
+      const speechIn = tabOn ? !!(status.speech && status.speech.in) : p.speech.in;
+      const ducked = tabOn ? ta.original < 1 : (p.duckedElements || 0) + (p.duckedWebAudio || 0) > 0;
+      if (!speechIn) rows.push(['warn', 'You hear their real voice (server not ready yet).']);
       else rows.push(ducked ? ['ok', 'Their real voice is turned down for you.'] : ['warn', "Can't turn their real voice down on this site: you may hear both."]);
     }
   }

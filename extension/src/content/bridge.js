@@ -52,12 +52,13 @@
   const toMain = (msg, transfer) => window.postMessage({ ...msg, __bb: TO_MAIN }, '*', transfer || []);
 
   let lastLangs = null;
+  let tabAudio = false; // their voice comes from the tab's sound (see offscreen.js)
   function sendSettings() {
     if (!settings) return;
     const langs = settings.myLang + '>' + settings.theirLang;
     const changed = lastLangs !== null && lastLangs !== langs;
     lastLangs = langs;
-    toMain({ type: 'settings', settings: { on: settings.on, hearOriginal: settings.hearOriginal, changed } });
+    toMain({ type: 'settings', settings: { on: settings.on, hearOriginal: settings.hearOriginal, changed, tabAudio } });
     overlay.render();
   }
 
@@ -110,6 +111,9 @@
       toMain({ type: 'tts', dir: msg.dir, sampleRate: msg.sampleRate, buffer }, [buffer]);
     } else if (msg.type === 'session') {
       toMain({ type: 'session', dir: msg.dir, speech: msg.speech });
+    } else if (msg.type === 'mode') {
+      tabAudio = !!msg.tabAudio;
+      sendSettings();
     }
   }
 

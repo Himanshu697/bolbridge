@@ -19,7 +19,7 @@
 // parent's engine. This script cannot use chrome.* APIs; it talks to
 // bridge.js through postMessage.
 (() => {
-  const VERSION = '0.3.1';
+  const VERSION = '0.4.0';
   if (window.__bolbridgeMain) return;
   try {
     const parentEngine = window.parent !== window ? window.parent.__bolbridgeMain : null;
@@ -68,6 +68,9 @@
     // Until then (or after any error) the real voice passes through, so the
     // other person never sits in silence.
     speech: { out: false, in: false },
+    // their voice comes from the tab's sound (the extension's offscreen page):
+    // the page then neither captures nor turns down their voice itself
+    tabAudio: false,
   };
   const stats = {
     chunks: { out: 0, in: 0 }, played: { out: 0, in: 0 }, ttsDropped: 0,
@@ -378,7 +381,7 @@
     const live = [...entries].filter((e) => e.alive && e.inputTrack.readyState === 'live');
     const sent = live.filter((e) => e.senders.size > 0);
     const mics = live.filter((e) => e.kind === 'mic').sort((a, b) => b.created - a.created);
-    const inCall = callInfo.calls > 0 || theirLive() > 0;
+    const inCall = callInfo.calls > 0 || theirLive() > 0 || state.tabAudio;
     let capture = null;
     let gate = null;
     let muted = false;
@@ -413,7 +416,7 @@
     incoming.proc.connect(sink);
     sink.connect(c.destination);
     incoming.proc.onaudioprocess = (e) => {
-      if (!active() || theirLive() === 0) return;
+      if (!active() || state.tabAudio || theirLive() === 0) return;
       const pcm = resample(e.inputBuffer.getChannelData(0), c.sampleRate);
       stats.chunks.in++;
       post({ type: 'audio', dir: 'in', buffer: pcm.buffer }, [pcm.buffer]);
@@ -582,7 +585,7 @@
     for (const e of entries) e.passGain.gain.value = out;
 
     // What you hear from them.
-    const translateIn = active() && state.speech.in;
+    const translateIn = active() && state.speech.in && !state.tabAudio;
     const original = translateIn ? (state.hearOriginal ? 0.15 : 0) : 1;
     let ducked = 0;
     for (const el of allMediaElements()) {
@@ -731,7 +734,7 @@
   // ---------------------------------------------------------------- call state
   let callActive = false;
   function updateCall() {
-    const live = theirLive() > 0 || route.sent.length > 0 || (callInfo.calls > 0 && entries.size > 0);
+    const live = theirLive() > 0 || route.sent.length > 0 || ((callInfo.calls > 0 || state.tabAudio) && entries.size > 0);
     if (live !== callActive) {
       callActive = live;
       post({ type: 'call', active: live });
@@ -807,6 +810,7 @@
           played: { ...stats.played },
           ttsDropped: stats.ttsDropped,
           speech: { ...state.speech },
+          tabAudio: state.tabAudio,
           on: state.on,
           wrapErrors: stats.wrapErrors,
         },
@@ -1120,6 +1124,9 @@
       state.ready = true;
       state.on = !!msg.settings.on;
       state.hearOriginal = !!msg.settings.hearOriginal;
+      const wasTab = state.tabAudio;
+      state.tabAudio = !!msg.settings.tabAudio;
+      if (wasTab !== state.tabAudio) state.speech.in = false; // their side waits for its new session
       if (msg.settings.changed || !state.on) {
         // new languages or translation off: real voice until a new session is ready
         state.speech = { out: false, in: false };
@@ -1130,6 +1137,7 @@
         nextStart.out = nextStart.in = 0;
       }
       applyLevels();
+      scanSoon();
     } else if (msg.type === 'session') {
       state.speech[msg.dir] = !!msg.speech;
       applyLevels();

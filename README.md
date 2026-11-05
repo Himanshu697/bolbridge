@@ -135,8 +135,14 @@ server (AWS EC2, E2E Networks or any VPS) with HTTPS, and
   through the call itself: the call connection always carries BolBridge's
   audio. The popup's Diagnostics shows how the call sends your voice and the
   sound levels on each side, and the web app has a **Test the extension** page.
-  The first real Google Meet call (v0.2) failed; still to be confirmed on a
-  real call.
+  On a real Google Meet call v0.3.1 sent the translated voice correctly, but
+  their voice did not reach BolBridge from inside the page. Extension v0.4.0
+  therefore hears them from the call tab's own sound (Chrome tab capture in
+  an offscreen page, started when you open the popup on the call tab), plays
+  the call back to you with the original turned down, and plays their
+  translation; the in-page route stays as the fallback. Tab audio is checked
+  in a test browser up to a running capture and a ready server session (the
+  test machine has no sound card); the real sound check is on a laptop.
 - Real models on a laptop (Ryzen 5 3500U, CPU only, WSL with 9 GB): Whisper
   small, M2M100 and Kokoro run; Hindi to English took about 10 s per sentence
   (hearing 6 s, translating 2.5 s, voice 2 s). Whisper small mishears Hindi, so

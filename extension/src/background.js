@@ -22,8 +22,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   for (const [key, { newValue }] of Object.entries(changes)) settings[key] = newValue;
   if (STREAM_KEYS.some((k) => k in changes)) {
-    for (const f of frames.values()) closeSockets(f);
+    for (const f of frames.values()) {
+      closeSockets(f);
+      // tab audio: their real voice until a new session is ready
+      if (f.virtual) safePost(f, { type: 'session', dir: 'in', speech: false });
+    }
   }
+  if ('on' in changes && !changes.on.newValue) {
+    for (const [tabId, t] of tabAudio) if (t.state === 'on' || t.state === 'starting') stopTabAudio(tabId, 'translation off');
+  }
+  if ('hearOriginal' in changes) offscreenSend({ type: 'options', hearOriginal: !!changes.hearOriginal.newValue });
 });
 
 /** key `${tabId}:${frameId}` -> frame state */
@@ -36,9 +44,33 @@ function tabState(tabId) {
   return tabs.get(tabId);
 }
 
-chrome.tabs.onRemoved.addListener((tabId) => tabs.delete(tabId));
+chrome.tabs.onRemoved.addListener((tabId) => {
+  tabs.delete(tabId);
+  if (tabAudio.has(tabId)) stopTabAudio(tabId, 'tab closed');
+  tabAudio.delete(tabId);
+});
+
+// Leaving the call site ends tab audio (moving around inside the site does not).
+const tabHosts = new Map();
+chrome.tabs.onUpdated.addListener((tabId, change) => {
+  if (!change.url) return;
+  let host = '';
+  try {
+    host = new URL(change.url).hostname;
+  } catch {
+    /* ignore */
+  }
+  const before = tabHosts.get(tabId);
+  tabHosts.set(tabId, host);
+  const t = tabAudio.get(tabId);
+  if (before && before !== host && t && (t.state === 'on' || t.state === 'starting')) stopTabAudio(tabId, 'left the call site');
+});
 
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'bb-offscreen') {
+    onOffscreen(port);
+    return;
+  }
   if (port.name !== 'bb-call' || !port.sender || !port.sender.tab) return;
   const tabId = port.sender.tab.id;
   const frameId = port.sender.frameId || 0;
@@ -60,6 +92,10 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onDisconnect.addListener(() => {
     closeSockets(f);
     frames.delete(key);
+    if (!tabHasCall(tabId)) {
+      const v = frames.get(`${tabId}:tab`);
+      if (v) closeSockets(v);
+    }
     notifyCallState(tabId);
   });
 });
@@ -73,10 +109,15 @@ async function onFrameMessage(f, msg) {
   switch (msg && msg.type) {
     case 'hello':
       f.platform = String(msg.platform || 'web').slice(0, 40);
+      if (tabAudioOn(f.tabId)) safePost(f, { type: 'mode', tabAudio: true });
       break;
     case 'call':
       f.callActive = !!msg.active;
       if (!f.callActive) closeSockets(f);
+      if (!tabHasCall(f.tabId)) {
+        const v = frames.get(`${f.tabId}:tab`);
+        if (v) closeSockets(v); // call over: tab audio stops sending
+      }
       notifyCallState(f.tabId);
       break;
     case 'audio':
@@ -279,22 +320,181 @@ function closeSockets(f) {
   closeSocket(f, 'in');
 }
 
+// ---- tab audio: hear the other person from the call tab's own sound ----
+// The popup (opened by you on the call tab) gets a capture id for the tab; an
+// offscreen page captures it, plays the call back to you and sends it here.
+// It acts as one more "frame" of the tab, carrying only their voice ('in').
+/** tabId -> { state: 'starting'|'on'|'error'|'stopped', error, level, original, chunks, played, why } */
+const tabAudio = new Map();
+let offscreenPort = null;
+const offscreenQueue = [];
+
+const tabAudioOn = (tabId) => {
+  const t = tabAudio.get(tabId);
+  return !!t && t.state === 'on';
+};
+const tabHasCall = (tabId) => [...frames.values()].some((f) => f.tabId === tabId && !f.virtual && f.callActive);
+
+function offscreenSend(msg) {
+  if (offscreenPort) {
+    try {
+      offscreenPort.postMessage(msg);
+      return;
+    } catch {
+      offscreenPort = null;
+    }
+  }
+  if (msg.type !== 'tts') offscreenQueue.push(msg);
+}
+
+async function ensureOffscreen() {
+  const open = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+  if (open.length) return;
+  try {
+    await chrome.offscreen.createDocument({
+      url: 'src/offscreen/offscreen.html',
+      reasons: ['USER_MEDIA'],
+      justification: 'Hear the other person in a call so BolBridge can translate them.',
+    });
+  } catch (e) {
+    if (!/single offscreen|already/i.test(String(e))) throw e;
+  }
+}
+
+function onOffscreen(port) {
+  offscreenPort = port;
+  port.onMessage.addListener((msg) => onOffscreenMessage(msg));
+  port.onDisconnect.addListener(() => {
+    if (offscreenPort === port) offscreenPort = null;
+  });
+  while (offscreenQueue.length) port.postMessage(offscreenQueue.shift());
+}
+
+async function onOffscreenMessage(msg) {
+  await settingsReady;
+  if (!msg) return;
+  const t = tabAudio.get(msg.tabId);
+  switch (msg.type) {
+    case 'hello':
+      // after a service worker restart: pick up the captures still running
+      for (const tabId of msg.active || []) {
+        if (tabAudioOn(tabId)) continue;
+        tabAudio.set(tabId, { state: 'on', error: null });
+        tabAudioFrame(tabId);
+        setTabMode(tabId, true);
+      }
+      break;
+    case 'started':
+      tabAudio.set(msg.tabId, { ...(t || {}), state: 'on', error: null });
+      setTabMode(msg.tabId, true);
+      break;
+    case 'error':
+      tabAudio.set(msg.tabId, { state: 'error', error: msg.error });
+      dropTabAudioFrame(msg.tabId);
+      setTabMode(msg.tabId, false);
+      break;
+    case 'stopped':
+      endTabAudio(msg.tabId, msg.why);
+      break;
+    case 'level':
+      if (t) Object.assign(t, { level: msg.level, original: msg.original, chunks: msg.chunks, played: msg.played, audio: msg.audio });
+      break;
+    case 'audio':
+      // only during a call, with translation on
+      if (!t || t.state !== 'on' || !settings.on || !tabHasCall(msg.tabId)) return;
+      sendAudio(tabAudioFrame(msg.tabId), 'in', msg.b64);
+      break;
+  }
+}
+
+function tabAudioFrame(tabId) {
+  const key = `${tabId}:tab`;
+  let f = frames.get(key);
+  if (!f) {
+    const real = [...frames.values()].find((x) => x.tabId === tabId && !x.virtual);
+    f = {
+      key, tabId, frameId: 'tab', virtual: true,
+      platform: real ? real.platform : 'web',
+      callActive: false,
+      sockets: { out: null, in: null },
+      queues: { out: [], in: [] },
+      header: { out: null, in: null },
+      blockedUntil: { out: 0, in: 0 },
+      diag: null,
+      top: false,
+      net: { out: newNet(), in: newNet() },
+      // translations and session changes go to the offscreen page
+      port: { postMessage: (m) => offscreenSend({ ...m, tabId }) },
+    };
+    frames.set(key, f);
+  }
+  return f;
+}
+
+function dropTabAudioFrame(tabId) {
+  const f = frames.get(`${tabId}:tab`);
+  if (!f) return;
+  closeSockets(f);
+  frames.delete(f.key);
+}
+
+/** Tell the page whether their voice now comes from the tab's sound. */
+function setTabMode(tabId, on) {
+  for (const f of frames.values()) {
+    if (f.tabId !== tabId || f.virtual) continue;
+    safePost(f, { type: 'mode', tabAudio: on });
+    if (on) closeSocket(f, 'in');
+  }
+}
+
+async function startTabAudio(tabId) {
+  await settingsReady;
+  if (typeof tabId !== 'number') throw new Error('bad request');
+  // Allowed once you have clicked the extension on this tab (the popup).
+  // The id is made here so the offscreen page may use it.
+  const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+  tabAudio.set(tabId, { state: 'starting', error: null });
+  tabAudioFrame(tabId);
+  await ensureOffscreen();
+  offscreenSend({ type: 'start', tabId, streamId, hearOriginal: !!settings.hearOriginal });
+}
+
+function endTabAudio(tabId, why) {
+  dropTabAudioFrame(tabId);
+  if (tabAudio.has(tabId)) tabAudio.set(tabId, { state: 'stopped', error: null, why: why || null });
+  setTabMode(tabId, false);
+}
+
+function stopTabAudio(tabId, why) {
+  offscreenSend({ type: 'stop', tabId });
+  endTabAudio(tabId, why);
+}
+
 // ---- popup and web app ----
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'bb-status') {
     const state = tabs.get(msg.tabId) || { captions: [], error: null, speech: {} };
     const tabFrames = [...frames.values()].filter((f) => f.tabId === msg.tabId);
+    const real = tabFrames.filter((f) => !f.virtual);
     sendResponse({
-      injected: tabFrames.length > 0,
-      callActive: tabFrames.some((f) => f.callActive),
+      injected: real.length > 0,
+      callActive: real.some((f) => f.callActive),
       connected: tabFrames.some((f) => f.sockets.out || f.sockets.in),
       captions: state.captions.slice(-4),
       error: state.error,
       speech: state.speech,
-      diag: tabDiag(tabFrames),
+      tabAudio: tabAudio.get(msg.tabId) || null,
+      diag: tabDiag(tabFrames, msg.tabId),
     });
     return;
+  }
+  if (msg.type === 'bb-tab-audio-start') {
+    startTabAudio(msg.tabId).then(
+      () => sendResponse({ ok: true }),
+      (e) => sendResponse({ ok: false, error: String((e && e.message) || e) }),
+    );
+    return true;
   }
   if (msg.type === 'bb-enable-site') {
     enableSite(msg.origin).then(sendResponse, (e) => sendResponse({ ok: false, error: String(e) }));
@@ -303,7 +503,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 /** One summary for the popup: the frame that holds the call, plus its sockets. */
-function tabDiag(tabFrames) {
+function tabDiag(tabFrames, tabId) {
   const withPage = tabFrames.filter((f) => f.diag);
   const busy = (f) => (f.diag.mics || 0) + (f.diag.wraps || 0) + (f.diag.theirTracks || 0) + (f.diag.calls || 0);
   const best = withPage.sort((a, b) => busy(b) - busy(a) || Number(b.top) - Number(a.top))[0];
@@ -325,7 +525,8 @@ function tabDiag(tabFrames) {
   return {
     version: chrome.runtime.getManifest().version,
     page: best ? best.diag : null,
-    frames: tabFrames.length,
+    frames: tabFrames.filter((f) => !f.virtual).length,
+    tabAudio: tabAudio.get(tabId) || null,
     // every frame that reported, for "Copy diagnostics"
     frameList: withPage.map((f) => ({ frameId: f.frameId, top: f.top, platform: f.platform, diag: f.diag })),
     net,

@@ -47,8 +47,8 @@ export function siteFor(url) {
 export const DEFAULTS = {
   on: true,
   myLang: 'hi',
-  theirLang: 'fr',
-  useMyVoice: true,
+  theirLang: 'en',
+  useMyVoice: false, // needs a voice sample and the voice service
   hearOriginal: false,
   announce: false,
   serverUrl: 'http://localhost:8000',
