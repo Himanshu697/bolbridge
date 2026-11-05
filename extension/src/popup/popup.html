@@ -61,6 +61,16 @@
     <p id="error" class="error hidden"></p>
     <p class="tip">Use headphones so your speakers don't get translated back.</p>
 
+    <details class="advanced" id="diagBox">
+      <summary>Diagnostics</summary>
+      <ul id="diagList" class="diag"><li class="muted">Open a call page to see what BolBridge is doing.</li></ul>
+      <div class="diag-actions">
+        <button id="testServer" type="button" class="btn-outline">Test server</button>
+        <button id="copyDiag" type="button" class="btn-outline">Copy diagnostics</button>
+      </div>
+      <p id="diagNote" class="muted" aria-live="polite"></p>
+    </details>
+
     <details class="advanced">
       <summary>Account and server</summary>
       <p id="accountLine" class="muted"></p>

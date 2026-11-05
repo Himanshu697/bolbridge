@@ -83,4 +83,13 @@ main { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
 footer { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
 footer a { color: var(--blue); font-weight: 600; text-decoration: none; }
 
+.diag { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.diag li { display: flex; gap: 6px; align-items: flex-start; line-height: 1.35; }
+.diag .ic { flex: none; width: 16px; text-align: center; font-weight: 700; }
+.diag .ok .ic { color: #127A3A; }
+.diag .bad .ic { color: #B42318; }
+.diag .warn .ic { color: #B4500C; }
+.diag .wait .ic { color: var(--ink-3); }
+.diag-actions { display: flex; gap: 8px; }
+.diag-actions button { flex: 1; }
 .hidden { display: none !important; }

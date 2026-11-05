@@ -78,3 +78,11 @@ To stop without losing the last sentence, send `{"type":"flush"}` then
 
 The binary audio frame always comes right after its `audio` header, on the same
 connection, so a client can pair them by order.
+
+### Extension test page
+
+`GET /api/test-speech?lang=en` (login required) returns a WAV of a fixed test
+sentence spoken in that language, with the sentence URL-encoded in the
+`X-Test-Sentence` header. The web app's **Test the extension** page plays it as
+the pretend other person. Languages without a voice answer `422`.
+

@@ -75,6 +75,7 @@ export default function Dashboard() {
         </div>
         <div className="row">
           <Link to="/app/try" className="btn outline"><Icon name="mic" size={18} />Try it here first</Link>
+          <a href="/app/extension-test" className="btn outline"><Icon name="puzzle" size={18} />Test the extension</a>
           <Link to="/connect-extension" className="btn primary"><Icon name="puzzle" size={18} />{ext.connected ? 'Extension connected' : 'Connect the extension'}</Link>
         </div>
       </div>

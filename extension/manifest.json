@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "BolBridge – Live Call Translator",
   "short_name": "BolBridge",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Speak your language, be heard in theirs. Live two-way voice translation on WhatsApp Web, OmeTV, Google Meet and more.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -23,7 +23,10 @@
     "service_worker": "src/background.js",
     "type": "module"
   },
-  "permissions": ["storage", "scripting"],
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
   "host_permissions": [
     "https://web.whatsapp.com/*",
     "https://ome.tv/*",
@@ -33,7 +36,9 @@
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*"
   ],
-  "optional_host_permissions": ["https://*/*"],
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
   "content_scripts": [
     {
       "matches": [
@@ -41,9 +46,18 @@
         "https://ome.tv/*",
         "https://*.ome.tv/*",
         "https://meet.google.com/*",
-        "https://app.zoom.us/*"
+        "https://app.zoom.us/*",
+        "http://localhost:3000/app/extension-test*",
+        "http://127.0.0.1:3000/app/extension-test*",
+        "http://localhost:8080/app/extension-test*",
+        "http://127.0.0.1:8080/app/extension-test*",
+        "https://*.trycloudflare.com/app/extension-test*",
+        "https://bolbridge.app/app/extension-test*",
+        "https://*.bolbridge.app/app/extension-test*"
       ],
-      "js": ["src/content/main-world.js"],
+      "js": [
+        "src/content/main-world.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
@@ -54,9 +68,18 @@
         "https://ome.tv/*",
         "https://*.ome.tv/*",
         "https://meet.google.com/*",
-        "https://app.zoom.us/*"
+        "https://app.zoom.us/*",
+        "http://localhost:3000/app/extension-test*",
+        "http://127.0.0.1:3000/app/extension-test*",
+        "http://localhost:8080/app/extension-test*",
+        "http://127.0.0.1:8080/app/extension-test*",
+        "https://*.trycloudflare.com/app/extension-test*",
+        "https://bolbridge.app/app/extension-test*",
+        "https://*.bolbridge.app/app/extension-test*"
       ],
-      "js": ["src/content/bridge.js"],
+      "js": [
+        "src/content/bridge.js"
+      ],
       "run_at": "document_start",
       "all_frames": true
     }

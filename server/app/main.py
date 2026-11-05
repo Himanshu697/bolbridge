@@ -20,10 +20,11 @@ from .languages import public_list
 from .pipeline import TranslationPipeline
 from .realtime.ws import router as ws_router
 from .routers.account import router as account_router
+from .routers.testcall import router as testcall_router
 from .routers.auth import router as auth_router
 from .routers.voice import router as voice_router
 
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 
 
 def create_app(settings: Settings | None = None, engines: Engines | None = None) -> FastAPI:
@@ -63,6 +64,7 @@ def create_app(settings: Settings | None = None, engines: Engines | None = None)
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Test-Sentence"],
     )
 
     @app.get("/health", tags=["meta"])
@@ -84,6 +86,7 @@ def create_app(settings: Settings | None = None, engines: Engines | None = None)
     app.include_router(auth_router)
     app.include_router(account_router)
     app.include_router(voice_router)
+    app.include_router(testcall_router)
     app.include_router(ws_router)
 
     if settings.web_dist:

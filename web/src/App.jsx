@@ -5,6 +5,7 @@ import AuthPage from './pages/Auth.jsx';
 import Chat from './pages/Chat.jsx';
 import ConnectExtension from './pages/ConnectExtension.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import ExtensionTest from './pages/ExtensionTest.jsx';
 import Landing from './pages/Landing.jsx';
 import Learn from './pages/Learn.jsx';
 import NotFound from './pages/NotFound.jsx';
@@ -16,6 +17,7 @@ import { navigate, useLocation } from './router.jsx';
 const APP_PAGES = {
   '/app': { page: Dashboard, title: 'Live Translate' },
   '/app/try': { page: Try, title: 'Try the translator' },
+  '/app/extension-test': { page: ExtensionTest, title: 'Test the extension' },
   '/app/voice': { page: Voice, title: 'My voice' },
   '/app/learn': { page: Learn, title: 'AI tutor' },
   '/app/chat': { page: Chat, title: 'Talk to the World' },

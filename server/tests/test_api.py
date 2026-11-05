@@ -151,3 +151,19 @@ def test_threads_default_to_physical_cores(tmp_path):
 
     assert make_settings(tmp_path).threads == max(1, (os.cpu_count() or 2) // 2)
     assert make_settings(tmp_path, cpu_threads=3).threads == 3
+
+
+def test_test_speech_for_the_extension_test_page(client):
+    from urllib.parse import unquote
+
+    from conftest import signup
+
+    assert client.get("/api/test-speech?lang=en").status_code == 401
+    token = signup(client)
+    h = {"Authorization": f"Bearer {token}"}
+    r = client.get("/api/test-speech?lang=en", headers=h)
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/wav"
+    assert r.content[:4] == b"RIFF"
+    assert unquote(r.headers["x-test-sentence"]).startswith("Hello!")
+    assert client.get("/api/test-speech?lang=ar", headers=h).status_code == 422  # subtitles-only language
+    assert client.get("/api/test-speech?lang=xx", headers=h).status_code == 422

@@ -51,6 +51,9 @@ chrome.runtime.onConnect.addListener((port) => {
     queues: { out: [], in: [] },
     header: { out: null, in: null },
     blockedUntil: { out: 0, in: 0 },
+    diag: null,
+    top: frameId === 0,
+    net: { out: newNet(), in: newNet() },
   };
   frames.set(key, f);
   port.onMessage.addListener((msg) => onFrameMessage(f, msg));
@@ -60,6 +63,10 @@ chrome.runtime.onConnect.addListener((port) => {
     notifyCallState(tabId);
   });
 });
+
+function newNet() {
+  return { socket: 'none', bytes: 0, results: 0, noSpeech: 0, pending: 0, lastClose: null, lastError: null, lastResultAt: null };
+}
 
 async function onFrameMessage(f, msg) {
   await settingsReady;
@@ -78,6 +85,10 @@ async function onFrameMessage(f, msg) {
     case 'stop':
       if (msg.dir === 'out' || msg.dir === 'in') closeSocket(f, msg.dir);
       break;
+    case 'diag':
+      f.diag = msg.diag && typeof msg.diag === 'object' ? msg.diag : null;
+      f.top = !!msg.top;
+      break;
   }
 }
 
@@ -90,6 +101,7 @@ function sendAudio(f, dir, b64) {
     if (!ws) return;
   }
   const buf = b64ToBuffer(b64);
+  f.net[dir].bytes += buf.byteLength;
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(buf);
   } else {
@@ -121,6 +133,7 @@ function openSocket(f, dir) {
     url = base.toString();
   } catch {
     setError(f.tabId, 'The server address in settings is not valid.');
+    f.net[dir].lastError = 'bad server address';
     f.blockedUntil[dir] = Date.now() + 10000;
     return null;
   }
@@ -128,13 +141,16 @@ function openSocket(f, dir) {
   const ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
   f.sockets[dir] = ws;
+  f.net[dir].socket = 'connecting';
   ws.onopen = () => {
+    f.net[dir].socket = 'open';
     setError(f.tabId, null);
     for (const buf of f.queues[dir]) ws.send(buf);
     f.queues[dir] = [];
   };
   ws.onmessage = (ev) => onServerMessage(f, dir, ev.data);
   ws.onerror = () => {
+    f.net[dir].lastError = 'cannot reach ' + new URL(url).host;
     setError(f.tabId, 'Cannot reach the translation server. Is it running?');
     f.blockedUntil[dir] = Date.now() + 5000;
     // Never leave the other person in silence: fall back to the real voice.
@@ -142,7 +158,15 @@ function openSocket(f, dir) {
     safePost(f, { type: 'session', dir, speech: false });
   };
   ws.onclose = (ev) => {
-    if (f.sockets[dir] === ws) f.sockets[dir] = null;
+    f.net[dir].socket = 'closed';
+    f.net[dir].lastClose = ev.code;
+    if (f.sockets[dir] === ws) {
+      // Not closed by us (server restarted, tunnel dropped, quota...): give the
+      // real voice back until a new session is ready.
+      f.sockets[dir] = null;
+      tabState(f.tabId).speech[dir] = false;
+      safePost(f, { type: 'session', dir, speech: false });
+    }
     f.queues[dir] = [];
     if (ev.code === 4401 || ev.code === 4402 || ev.code === 4400) {
       f.blockedUntil[dir] = Date.now() + 30000;
@@ -171,8 +195,18 @@ function onServerMessage(f, dir, data) {
       safePost(f, { type: 'session', dir, speech: !!msg.speech });
       if (msg.minutes_left != null) chrome.storage.local.set({ minutesLeft: msg.minutes_left });
       break;
+    case 'status':
+      f.net[dir].pending = msg.pending || 0;
+      break;
+    case 'notice':
+      if (msg.code === 'no_speech') f.net[dir].noSpeech++;
+      break;
     case 'result':
     case 'announcement':
+      if (msg.type === 'result') {
+        f.net[dir].results++;
+        f.net[dir].lastResultAt = Date.now();
+      }
       addCaption(f.tabId, {
         dir,
         kind: msg.type,
@@ -190,6 +224,7 @@ function onServerMessage(f, dir, data) {
       chrome.storage.local.set({ minutesLeft: msg.minutes_left });
       break;
     case 'error':
+      f.net[dir].lastError = msg.code || msg.message || 'error';
       setError(f.tabId, msg.message || 'Translation error');
       if (msg.code === 'quota_exceeded' || msg.code === 'auth') {
         state.speech[dir] = false;
@@ -227,6 +262,7 @@ function notifyCallState(tabId) {
 function closeSocket(f, dir) {
   const ws = f.sockets[dir];
   f.sockets[dir] = null;
+  if (ws) f.net[dir].socket = 'closed';
   f.queues[dir] = [];
   f.header[dir] = null;
   if (ws && ws.readyState <= WebSocket.OPEN) {
@@ -256,6 +292,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       captions: state.captions.slice(-4),
       error: state.error,
       speech: state.speech,
+      diag: tabDiag(tabFrames),
     });
     return;
   }
@@ -264,6 +301,38 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 });
+
+/** One summary for the popup: the frame that holds the call, plus its sockets. */
+function tabDiag(tabFrames) {
+  const withPage = tabFrames.filter((f) => f.diag);
+  const busy = (f) => (f.diag.mics || 0) + (f.diag.theirTracks || 0);
+  const best = withPage.sort((a, b) => busy(b) - busy(a) || Number(b.top) - Number(a.top))[0];
+  const net = { out: newNet(), in: newNet() };
+  for (const f of tabFrames) {
+    for (const dir of ['out', 'in']) {
+      const a = net[dir];
+      const b = f.net[dir];
+      a.bytes += b.bytes;
+      a.results += b.results;
+      a.noSpeech += b.noSpeech;
+      a.pending += b.pending;
+      if (b.socket !== 'none' && (a.socket === 'none' || b.socket === 'open')) a.socket = b.socket;
+      a.lastClose = b.lastClose ?? a.lastClose;
+      a.lastError = b.lastError ?? a.lastError;
+      a.lastResultAt = Math.max(a.lastResultAt || 0, b.lastResultAt || 0) || null;
+    }
+  }
+  return {
+    version: chrome.runtime.getManifest().version,
+    page: best ? best.diag : null,
+    frames: tabFrames.length,
+    net,
+    server: settings.serverUrl,
+    signedIn: !!settings.token,
+    on: !!settings.on,
+    langs: `${settings.myLang}>${settings.theirLang}`,
+  };
+}
 
 async function enableSite(origin) {
   const url = new URL(origin);

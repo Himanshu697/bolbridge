@@ -3,10 +3,13 @@ import { DEFAULTS, LANGUAGES, hasVoice, langName, siteFor } from '../shared/lang
 const $ = (id) => document.getElementById(id);
 let settings = { ...DEFAULTS };
 let tab = null;
+let lastStatus = null;
 
 async function init() {
   settings = { ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) };
-  [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  // ?tab=<id> shows another tab's status (handy when the popup is opened as a page for debugging)
+  const forced = Number(new URLSearchParams(location.search).get('tab'));
+  [tab] = forced ? [await chrome.tabs.get(forced)] : await chrome.tabs.query({ active: true, currentWindow: true });
 
   for (const select of [$('myLang'), $('theirLang')]) {
     for (const l of LANGUAGES) {
@@ -35,6 +38,8 @@ async function init() {
   $('getMinutes').addEventListener('click', (e) => openWeb(e, '/app/plan'));
   $('connectAccount').addEventListener('click', (e) => openWeb(e, '/connect-extension'));
   $('enableSiteBtn').addEventListener('click', enableSite);
+  $('testServer').addEventListener('click', testServer);
+  $('copyDiag').addEventListener('click', copyDiag);
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
@@ -113,6 +118,9 @@ async function refreshStatus() {
   $('error').textContent = status.error || '';
   $('error').classList.toggle('hidden', !status.error);
 
+  lastStatus = status;
+  renderDiag(status);
+
   const box = $('captions');
   box.replaceChildren();
   if (!status.captions || status.captions.length === 0) {
@@ -140,6 +148,105 @@ async function enableSite() {
   if (res && res.ok) {
     $('statusText').textContent = 'ready, reloading the page…';
     chrome.tabs.reload(tab.id);
+  }
+}
+
+// ------------------------------------------------------------ diagnostics
+const CLOSE_REASONS = {
+  1006: 'connection dropped (server stopped, or the address changed)',
+  4400: 'language not supported',
+  4401: 'login needed: paste a fresh account key below',
+  4402: 'no minutes left this month',
+};
+
+function seconds(bytes) {
+  return Math.round(bytes / 32000); // 16 kHz, 16-bit mono
+}
+
+function serverLine(n) {
+  if (n.socket === 'open') return ['ok', 'connected'];
+  if (n.socket === 'connecting') return ['wait', 'connecting…'];
+  if (n.lastClose && CLOSE_REASONS[n.lastClose]) return ['bad', CLOSE_REASONS[n.lastClose]];
+  if (n.lastError) return ['bad', n.lastError];
+  if (n.socket === 'closed') return ['wait', `closed${n.lastClose ? ' (code ' + n.lastClose + ')' : ''}`];
+  return ['wait', 'not used yet'];
+}
+
+function diagRows(status) {
+  const d = status.diag;
+  const rows = [];
+  if (!status.injected || !d) {
+    rows.push(['bad', 'BolBridge is not running on this page. Reload the call page (after installing or updating the extension).']);
+    return rows;
+  }
+  const p = d.page;
+  if (!p) {
+    rows.push(['wait', 'Page ready. Waiting for the call to use the microphone.']);
+  } else {
+    if (p.mics > 0) rows.push(p.micMuted ? ['warn', 'Microphone captured, but you are muted in the call.'] : ['ok', 'Microphone captured.']);
+    else rows.push(['wait', p.micRequests > 0 ? 'Microphone was released.' : 'No microphone yet: join the call.']);
+    if (p.audio === 'running') rows.push(['ok', `Audio engine running (${p.sampleRate} Hz).`]);
+    else if (p.audio === 'suspended') rows.push(['bad', 'Audio is paused by Chrome: click anywhere on the call page once.']);
+    else rows.push(['wait', `Audio engine: ${p.audio}.`]);
+    rows.push(p.theirTracks > 0 ? ['ok', `Their audio found (${p.theirTracks} stream${p.theirTracks > 1 ? 's' : ''}).`] : ['wait', 'Waiting for the other person to join.']);
+  }
+  if (!d.on) rows.push(['warn', 'Translation is off.']);
+  const [outCls, outText] = serverLine(d.net.out);
+  const [inCls, inText] = serverLine(d.net.in);
+  rows.push([outCls, `Server, your side: ${outText}.`]);
+  rows.push([inCls, `Server, their side: ${inText}.`]);
+  rows.push(['wait', `Sent to server: your audio ${seconds(d.net.out.bytes)} s, theirs ${seconds(d.net.in.bytes)} s.`]);
+  const tr = (n) => `${n.results} done${n.pending ? `, ${n.pending} in progress` : ''}${n.noSpeech ? `, ${n.noSpeech} with no words heard` : ''}`;
+  rows.push([d.net.out.results || d.net.in.results ? 'ok' : 'wait', `Translations: you → them ${tr(d.net.out)}; them → you ${tr(d.net.in)}.`]);
+  if (p && d.on) {
+    rows.push(p.speech.out ? ['ok', 'They hear your translated voice.'] : ['warn', 'They hear your real voice (server not ready yet).']);
+    if (p.theirTracks > 0) {
+      const ducked = (p.duckedElements || 0) + (p.duckedWebAudio || 0);
+      if (!p.speech.in) rows.push(['warn', 'You hear their real voice (server not ready yet).']);
+      else rows.push(ducked ? ['ok', 'Their real voice is turned down for you.'] : ['warn', "Can't turn their real voice down on this site: you may hear both."]);
+    }
+  }
+  if (!d.signedIn) rows.push(['warn', 'Not signed in: paste your account key below if the server needs login.']);
+  return rows;
+}
+
+function renderDiag(status) {
+  const list = $('diagList');
+  const icons = { ok: '✓', bad: '✕', warn: '!', wait: '·' };
+  list.replaceChildren(
+    ...diagRows(status).map(([cls, text]) => {
+      const li = document.createElement('li');
+      li.className = cls;
+      const ic = document.createElement('span');
+      ic.className = 'ic';
+      ic.textContent = icons[cls];
+      li.append(ic, document.createTextNode(text));
+      return li;
+    }),
+  );
+}
+
+async function testServer() {
+  const note = $('diagNote');
+  const base = (settings.serverUrl || '').replace(/\/$/, '');
+  note.textContent = `Checking ${base}…`;
+  try {
+    const res = await fetch(base + '/health', { cache: 'no-store' });
+    const h = await res.json();
+    const e = h.engines || {};
+    note.textContent = h.ok ? `Server OK (version ${h.version}): ${e.asr}, ${e.mt}, ${e.tts}.` : 'The server answered but is not ready.';
+  } catch {
+    note.textContent = `Cannot reach ${base}. Is the server running, and is this the latest address?`;
+  }
+}
+
+async function copyDiag() {
+  const report = { at: new Date().toISOString(), site: tab && tab.url ? hostOf(tab.url) : null, status: lastStatus };
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+    $('diagNote').textContent = 'Copied. Paste it to whoever is helping you.';
+  } catch {
+    $('diagNote').textContent = 'Could not copy.';
   }
 }
 

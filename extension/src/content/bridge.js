@@ -84,6 +84,14 @@
       case 'stop':
         if (port) port.postMessage({ type: 'stop', dir: msg.dir });
         break;
+      case 'diag': {
+        // Only frames that touch a microphone or a call report in; idle frames stay quiet.
+        const d = msg.diag || {};
+        if (!port && !(d.micRequests > 0 || d.theirTracks > 0)) break;
+        const p = getPort();
+        if (p) p.postMessage({ type: 'diag', diag: d, top: IS_TOP });
+        break;
+      }
     }
   });
 

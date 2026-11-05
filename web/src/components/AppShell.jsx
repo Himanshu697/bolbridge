@@ -6,6 +6,8 @@ import { Logo } from './ui.jsx';
 const NAV = [
   { to: '/app', icon: 'globe', label: 'Live Translate' },
   { to: '/app/try', icon: 'mic', label: 'Try the translator' },
+  // a full page load, so the extension can attach to the test call
+  { to: '/app/extension-test', icon: 'puzzle', label: 'Test the extension', reload: true },
   { to: '/app/voice', icon: 'user', label: 'My voice' },
   { sep: true },
   { to: '/app/learn', icon: 'book', label: 'AI tutor', tag: ['Soon', 'orange'] },
@@ -50,11 +52,18 @@ export default function AppShell({ path, children }) {
             item.sep ? (
               <div key={i} className="sep" />
             ) : (
-              <Link key={item.to} to={item.to} aria-current={path === item.to ? 'page' : undefined}>
-                <Icon name={item.icon} />
-                {item.label}
-                {item.tag && <span className={`pill ${item.tag[1]} tag`} style={{ padding: '2px 8px', fontSize: 12 }}>{item.tag[0]}</span>}
-              </Link>
+              item.reload ? (
+                <a key={item.to} href={item.to} aria-current={path === item.to ? 'page' : undefined}>
+                  <Icon name={item.icon} />
+                  {item.label}
+                </a>
+              ) : (
+                <Link key={item.to} to={item.to} aria-current={path === item.to ? 'page' : undefined}>
+                  <Icon name={item.icon} />
+                  {item.label}
+                  {item.tag && <span className={`pill ${item.tag[1]} tag`} style={{ padding: '2px 8px', fontSize: 12 }}>{item.tag[0]}</span>}
+                </Link>
+              )
             ),
           )}
         </nav>

@@ -126,9 +126,13 @@ server (AWS EC2, E2E Networks or any VPS) with HTTPS, and
 - Server: all unit and stream tests pass (mock engines).
 - Web app: sign-up, dashboard, contacts, translator test page, voice upload,
   plans and waitlists, driven in Chrome.
-- Extension: on a two-party WebRTC test call, both directions were translated
-  and subtitles showed (mock engines). Not yet tried on a real WhatsApp Web,
-  OmeTV or Meet call.
+- Extension (v0.3): on Meet-like test calls (mic opened before any click,
+  Chrome's real autoplay rules, the other person played through `<audio>` or
+  Web Audio) both directions are translated, the original voice is turned down,
+  and the real voice comes back if the server is unreachable or stops. The popup
+  has a Diagnostics section, and the web app has a **Test the extension** page.
+  A first real Google Meet call (v0.2) failed; v0.3 is the fix, still to be
+  confirmed on a real call.
 - Real models on a laptop (Ryzen 5 3500U, CPU only, WSL with 9 GB): Whisper
   small, M2M100 and Kokoro run; Hindi to English took about 10 s per sentence
   (hearing 6 s, translating 2.5 s, voice 2 s). Whisper small mishears Hindi, so
@@ -139,8 +143,6 @@ server (AWS EC2, E2E Networks or any VPS) with HTTPS, and
 Next: see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Licences
-
-Copyright (c) 2026 Himanshu Goswami. Licensed under AGPL-3.0.
 
 Your code in this repository is yours. The open-source models keep their own
 licences (all allow commercial use): Whisper (MIT), M2M100 (MIT), Kokoro-82M
